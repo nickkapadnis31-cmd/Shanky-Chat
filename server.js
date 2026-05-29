@@ -4,9 +4,19 @@ const express = require("express");
 
 const axios = require("axios");
 
+const admin = require("firebase-admin");
+
 const app = express();
 
 app.use(express.json());
+
+const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+const db = admin.firestore();
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
