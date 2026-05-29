@@ -10,6 +10,7 @@ app.use(express.json());
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
+// Firebase Setup
 const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
 
 admin.initializeApp({
@@ -18,6 +19,7 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
+// VERIFY WEBHOOK
 app.get("/webhook", (req, res) => {
 
   const mode = req.query["hub.mode"];
@@ -25,13 +27,15 @@ app.get("/webhook", (req, res) => {
   const challenge = req.query["hub.challenge"];
 
   if (mode && token === VERIFY_TOKEN) {
+    console.log("Webhook verified");
     return res.status(200).send(challenge);
   }
 
-  res.sendStatus(403);
+  return res.sendStatus(403);
 
 });
 
+// MAIN WEBHOOK
 app.post("/webhook", async (req, res) => {
 
   try {
@@ -41,47 +45,141 @@ app.post("/webhook", async (req, res) => {
     const message =
       req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
-    if (message) {
+    if (!message) {
+      return res.sendStatus(200);
+    }
 
-      const from = message.from;
+    const from = message.from;
 
-      const userMessage =
-        message.text?.body?.trim() || "";
+    const userMessage =
+      message.text?.body?.trim() || "";
 
-      // Save user
-      await db.collection("users").doc(from).set({
-        phone: from,
-        createdAt: new Date()
-      }, { merge: true });
+    // USER REFERENCE
+    const userRef = db.collection("users").doc(from);
 
-      // Save message
-      await db.collection("messages").add({
-        from,
-        text: userMessage,
-        createdAt: new Date()
-      });
+    // SAVE USER
+    await userRef.set({
+      phone: from,
+      updatedAt: new Date()
+    }, { merge: true });
 
-      // Get user data
-      const userRef = db.collection("users").doc(from);
+    // SAVE MESSAGE
+    await db.collection("messages").add({
+      from,
+      text: userMessage,
+      createdAt: new Date()
+    });
 
-      const userSnap = await userRef.get();
+    // GET USER DATA
+    const userSnap = await userRef.get();
 
-      const userData = userSnap.data() || {};
+    const userData = userSnap.data() || {};
 
-      const state = userData.state || "new";
+    const state = userData.state || "new";
 
-      let replyText = "";
+    let replyText = "";
 
-      // START FLOW
-      if (
-        userMessage.toLowerCase() === "hi" ||
-        state === "new"
-      ) {
+    // =========================
+    // START FLOW
+    // =========================
+    if (
+      userMessage.toLowerCase() === "hi" ||
+      state === "new"
+    ) {
 
-        replyText =
-`👋 Welcome to Shanky Chat
+      replyText =
+`👋 Welcome to Blind Chat
 
 Send any WhatsApp number to connect and chat privately without sharing mobile numbers.`;
+
+      await userRef.set({
+        state: "waiting_for_number"
+      }, { merge: true });
+
+    }
+
+    // =========================
+    // WAITING FOR NUMBER
+    // =========================
+    else if (state === "waiting_for_number") {
+
+      const cleanNumber =
+        userMessage.replace(/\D/g, "");
+
+      replyText =
+`✅ You entered:
+
+${cleanNumber}
+
+Reply:
+1 to confirm
+2 to type again`;
+
+      await userRef.set({
+        pendingNumber: cleanNumber,
+        state: "waiting_for_confirmation"
+      }, { merge: true });
+
+    }
+
+    // =========================
+    // NUMBER CONFIRMATION
+    // =========================
+    else if (state === "waiting_for_confirmation") {
+
+      // CONFIRM
+      if (userMessage === "1") {
+
+        const targetNumber =
+          userData.pendingNumber;
+
+        // SEND INVITATION
+        await axios.post(
+          `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
+          {
+            messaging_product: "whatsapp",
+            to: targetNumber,
+            text: {
+              body:
+`💬 Someone you know wants to chat with you without sharing mobile number.
+
+Reply to continue chatting 👇
+
+👋 Hi
+🤔 Who are you? Name please?
+❌ I don't want to chat`
+            }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.TOKEN}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+
+        // SAVE USER1 SESSION
+        await userRef.set({
+          state: "waiting_for_accept",
+          chatPartner: targetNumber
+        }, { merge: true });
+
+        // SAVE USER2 SESSION
+        await db.collection("users").doc(targetNumber).set({
+          state: "pending_request",
+          chatPartner: from
+        }, { merge: true });
+
+        replyText =
+`📨 Invitation sent successfully. Waiting for reply.`;
+
+      }
+
+      // TYPE AGAIN
+      else {
+
+        replyText =
+`Send the WhatsApp number again.`;
 
         await userRef.set({
           state: "waiting_for_number"
@@ -89,66 +187,36 @@ Send any WhatsApp number to connect and chat privately without sharing mobile nu
 
       }
 
-      // WAITING FOR NUMBER
-      else if (state === "waiting_for_number") {
+    }
 
-        replyText =
-`✅ You entered:
+    // =========================
+    // USER2 ACCEPTS CHAT
+    // =========================
+    else if (state === "pending_request") {
 
-${userMessage}
+      const partner = userData.chatPartner;
 
-Reply:
-1 to confirm
-2 to type again`;
+      // USER2 ACCEPTED
+      await userRef.set({
+        state: "chatting"
+      }, { merge: true });
 
-        await userRef.set({
-          pendingNumber: userMessage,
-          state: "waiting_for_confirmation"
-        }, { merge: true });
+      // UPDATE USER1
+      await db.collection("users").doc(partner).set({
+        state: "chatting"
+      }, { merge: true });
 
-      }
-
-      // CONFIRMATION
-      else if (state === "waiting_for_confirmation") {
-
-        if (userMessage === "1") {
-
-          replyText =
-`📨 Invitation sent successfully.`;
-
-          await userRef.set({
-            state: "idle"
-          }, { merge: true });
-
-        } else {
-
-          replyText =
-`Send the WhatsApp number again.`;
-
-          await userRef.set({
-            state: "waiting_for_number"
-          }, { merge: true });
-
-        }
-
-      }
-
-      // DEFAULT
-      else {
-
-        replyText =
-`Send "Hi" to start.`;
-
-      }
-
-      // Send reply
+      // INFORM USER1
       await axios.post(
         `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
         {
           messaging_product: "whatsapp",
-          to: from,
+          to: partner,
           text: {
-            body: replyText
+            body:
+`🎉 Your chat request was accepted.
+
+You can now start chatting.`
           }
         },
         {
@@ -159,22 +227,131 @@ Reply:
         }
       );
 
+      replyText =
+`🎉 Chat connected successfully.
+
+You can now start chatting.`;
+
     }
 
-    res.sendStatus(200);
+    // =========================
+    // ACTIVE CHAT RELAY
+    // =========================
+    else if (state === "chatting") {
+
+      // END CHAT
+      if (userMessage.toLowerCase() === "/end") {
+
+        const partner = userData.chatPartner;
+
+        // RESET CURRENT USER
+        await userRef.set({
+          state: "idle",
+          chatPartner: admin.firestore.FieldValue.delete()
+        }, { merge: true });
+
+        // RESET PARTNER
+        await db.collection("users").doc(partner).set({
+          state: "idle",
+          chatPartner: admin.firestore.FieldValue.delete()
+        }, { merge: true });
+
+        // INFORM PARTNER
+        await axios.post(
+          `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
+          {
+            messaging_product: "whatsapp",
+            to: partner,
+            text: {
+              body:
+`❌ Chat ended by other user.`
+            }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.TOKEN}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+
+        replyText =
+`✅ Chat ended successfully.`;
+
+      }
+
+      // RELAY MESSAGE
+      else {
+
+        const partner = userData.chatPartner;
+
+        // FORWARD MESSAGE
+        await axios.post(
+          `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
+          {
+            messaging_product: "whatsapp",
+            to: partner,
+            text: {
+              body: userMessage
+            }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.TOKEN}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+
+        return res.sendStatus(200);
+
+      }
+
+    }
+
+    // =========================
+    // DEFAULT
+    // =========================
+    else {
+
+      replyText =
+`Send "Hi" to start.`;
+
+    }
+
+    // SEND REPLY
+    await axios.post(
+      `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: from,
+        text: {
+          body: replyText
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.TOKEN}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    return res.sendStatus(200);
 
   } catch (error) {
 
     console.log(error.response?.data || error.message);
 
-    res.sendStatus(500);
+    return res.sendStatus(500);
 
   }
 
 });
 
+// START SERVER
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+  console.log(`Server running on port ${PORT}`);
 });
