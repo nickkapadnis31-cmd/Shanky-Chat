@@ -25,7 +25,6 @@ app.get("/webhook", (req, res) => {
   const challenge = req.query["hub.challenge"];
 
   if (mode && token === VERIFY_TOKEN) {
-    console.log("Webhook verified");
     return res.status(200).send(challenge);
   }
 
@@ -46,7 +45,8 @@ app.post("/webhook", async (req, res) => {
 
       const from = message.from;
 
-      const userMessage = message.text?.body || "";
+      const userMessage =
+        message.text?.body?.trim() || "";
 
       // Save user
       await db.collection("users").doc(from).set({
@@ -61,17 +61,94 @@ app.post("/webhook", async (req, res) => {
         createdAt: new Date()
       });
 
-      // Auto reply
+      // Get user data
+      const userRef = db.collection("users").doc(from);
+
+      const userSnap = await userRef.get();
+
+      const userData = userSnap.data() || {};
+
+      const state = userData.state || "new";
+
+      let replyText = "";
+
+      // START FLOW
+      if (
+        userMessage.toLowerCase() === "hi" ||
+        state === "new"
+      ) {
+
+        replyText =
+`👋 Welcome to Shanky Chat
+
+Send any WhatsApp number to connect and chat privately without sharing mobile numbers.`;
+
+        await userRef.set({
+          state: "waiting_for_number"
+        }, { merge: true });
+
+      }
+
+      // WAITING FOR NUMBER
+      else if (state === "waiting_for_number") {
+
+        replyText =
+`✅ You entered:
+
+${userMessage}
+
+Reply:
+1 to confirm
+2 to type again`;
+
+        await userRef.set({
+          pendingNumber: userMessage,
+          state: "waiting_for_confirmation"
+        }, { merge: true });
+
+      }
+
+      // CONFIRMATION
+      else if (state === "waiting_for_confirmation") {
+
+        if (userMessage === "1") {
+
+          replyText =
+`📨 Invitation sent successfully.`;
+
+          await userRef.set({
+            state: "idle"
+          }, { merge: true });
+
+        } else {
+
+          replyText =
+`Send the WhatsApp number again.`;
+
+          await userRef.set({
+            state: "waiting_for_number"
+          }, { merge: true });
+
+        }
+
+      }
+
+      // DEFAULT
+      else {
+
+        replyText =
+`Send "Hi" to start.`;
+
+      }
+
+      // Send reply
       await axios.post(
         `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
         {
           messaging_product: "whatsapp",
           to: from,
           text: {
-            body:
-`👋 Welcome to Shanky Chat
-
-Send any WhatsApp number to connect and chat privately without sharing mobile numbers.`
+            body: replyText
           }
         },
         {
