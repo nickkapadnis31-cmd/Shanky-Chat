@@ -46,6 +46,11 @@ app.post("/webhook", async (req, res) => {
 
       const from = message.from;
 
+await db.collection("users").doc(from).set({
+  phone: from,
+  createdAt: new Date()
+}, { merge: true });
+
       await axios.post(
         `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
         {
