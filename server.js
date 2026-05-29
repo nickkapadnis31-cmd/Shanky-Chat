@@ -1,14 +1,14 @@
 require("dotenv").config();
 
 const express = require("express");
-
 const axios = require("axios");
-
 const admin = require("firebase-admin");
 
 const app = express();
 
 app.use(express.json());
+
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
 
@@ -18,9 +18,8 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-
 app.get("/webhook", (req, res) => {
+
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
@@ -31,13 +30,14 @@ app.get("/webhook", (req, res) => {
   }
 
   res.sendStatus(403);
+
 });
 
 app.post("/webhook", async (req, res) => {
 
-  console.log(JSON.stringify(req.body, null, 2));
-
   try {
+
+    console.log(JSON.stringify(req.body, null, 2));
 
     const message =
       req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
@@ -46,11 +46,22 @@ app.post("/webhook", async (req, res) => {
 
       const from = message.from;
 
-await db.collection("users").doc(from).set({
-  phone: from,
-  createdAt: new Date()
-}, { merge: true });
+      const userMessage = message.text?.body || "";
 
+      // Save user
+      await db.collection("users").doc(from).set({
+        phone: from,
+        createdAt: new Date()
+      }, { merge: true });
+
+      // Save message
+      await db.collection("messages").add({
+        from,
+        text: userMessage,
+        createdAt: new Date()
+      });
+
+      // Auto reply
       await axios.post(
         `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
         {
@@ -58,7 +69,9 @@ await db.collection("users").doc(from).set({
           to: from,
           text: {
             body:
-              "👋 Welcome to Shanky Chat\n\nSend any WhatsApp number to connect and chat privately without sharing mobile numbers."
+`👋 Welcome to Shanky Chat
+
+Send any WhatsApp number to connect and chat privately without sharing mobile numbers.`
           }
         },
         {
@@ -86,5 +99,5 @@ await db.collection("users").doc(from).set({
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("Server running");
+  console.log("Server running on port " + PORT);
 });
