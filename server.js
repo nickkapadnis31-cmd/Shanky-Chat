@@ -150,6 +150,12 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', async (req, res) => {
     try {
         const body = req.body;
+        
+        // --- ADD THESE TWO LINES HERE ---
+        console.log("=== INCOMING WEBHOOK ===");
+        console.log(JSON.stringify(body, null, 2));
+        // --------------------------------
+
         if (body.object === 'whatsapp_business_account') {
             for (const entry of body.entry) {
                 const changes = entry.changes[0].value;
