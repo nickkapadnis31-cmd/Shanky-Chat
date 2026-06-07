@@ -1,2 +1,13 @@
-node_modules
+node_modules/
+
 .env
+
+serviceAccountKey.json
+
+firebase-adminsdk.json
+
+firebase-key.json
+
+*.log
+
+.DS_Store
