@@ -1,357 +1,257 @@
-require("dotenv").config();
-
 const express = require("express");
 const axios = require("axios");
 const admin = require("firebase-admin");
 
 const app = express();
-
 app.use(express.json());
 
+/* =========================
+ENV VARIABLES
+========================= */
+
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+const TOKEN = process.env.TOKEN;
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
+const ADMIN_NUMBER = process.env.ADMIN_NUMBER;
 
-// Firebase Setup
-const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+/* =========================
+FIREBASE INIT
+========================= */
 
+const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
+
+if (!admin.apps.length) {
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+credential: admin.credential.cert(firebaseConfig),
 });
+}
 
 const db = admin.firestore();
 
-// VERIFY WEBHOOK
-app.get("/webhook", (req, res) => {
+/* =========================
+SERVER
+========================= */
 
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
-
-  if (mode && token === VERIFY_TOKEN) {
-    console.log("Webhook verified");
-    return res.status(200).send(challenge);
-  }
-
-  return res.sendStatus(403);
-
-});
-
-// MAIN WEBHOOK
-app.post("/webhook", async (req, res) => {
-
-  try {
-
-    console.log(JSON.stringify(req.body, null, 2));
-
-    const message =
-      req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-
-    if (!message) {
-      return res.sendStatus(200);
-    }
-
-    const from = message.from;
-
-    const userMessage =
-      message.text?.body?.trim() || "";
-
-    // USER REFERENCE
-    const userRef = db.collection("users").doc(from);
-
-    // SAVE USER
-    await userRef.set({
-      phone: from,
-      updatedAt: new Date()
-    }, { merge: true });
-
-    // SAVE MESSAGE
-    await db.collection("messages").add({
-      from,
-      text: userMessage,
-      createdAt: new Date()
-    });
-
-    // GET USER DATA
-    const userSnap = await userRef.get();
-
-    const userData = userSnap.data() || {};
-
-    const state = userData.state || "new";
-
-    let replyText = "";
-
-    // =========================
-    // START FLOW
-    // =========================
-    if (
-      userMessage.toLowerCase() === "hi" ||
-      state === "new"
-    ) {
-
-      replyText =
-`👋 Welcome to Blind Chat
-
-Send any WhatsApp number to connect and chat privately without sharing mobile numbers.`;
-
-      await userRef.set({
-        state: "waiting_for_number"
-      }, { merge: true });
-
-    }
-
-    // =========================
-    // WAITING FOR NUMBER
-    // =========================
-    else if (state === "waiting_for_number") {
-
-      const cleanNumber =
-        userMessage.replace(/\D/g, "");
-
-      replyText =
-`✅ You entered:
-
-${cleanNumber}
-
-Reply:
-1 to confirm
-2 to type again`;
-
-      await userRef.set({
-        pendingNumber: cleanNumber,
-        state: "waiting_for_confirmation"
-      }, { merge: true });
-
-    }
-
-    // =========================
-    // NUMBER CONFIRMATION
-    // =========================
-    else if (state === "waiting_for_confirmation") {
-
-      // CONFIRM
-      if (userMessage === "1") {
-
-        const targetNumber =
-          userData.pendingNumber;
-
-        // SEND INVITATION
-        await axios.post(
-          `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
-          {
-            messaging_product: "whatsapp",
-            to: targetNumber,
-            text: {
-              body:
-`💬 Someone you know wants to chat with you without sharing mobile number.
-
-Reply to continue chatting 👇
-
-👋 Hi
-🤔 Who are you? Name please?
-❌ I don't want to chat`
-            }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${process.env.TOKEN}`,
-              "Content-Type": "application/json"
-            }
-          }
-        );
-
-        // SAVE USER1 SESSION
-        await userRef.set({
-          state: "waiting_for_accept",
-          chatPartner: targetNumber
-        }, { merge: true });
-
-        // SAVE USER2 SESSION
-        await db.collection("users").doc(targetNumber).set({
-          state: "pending_request",
-          chatPartner: from
-        }, { merge: true });
-
-        replyText =
-`📨 Invitation sent successfully. Waiting for reply.`;
-
-      }
-
-      // TYPE AGAIN
-      else {
-
-        replyText =
-`Send the WhatsApp number again.`;
-
-        await userRef.set({
-          state: "waiting_for_number"
-        }, { merge: true });
-
-      }
-
-    }
-
-    // =========================
-    // USER2 ACCEPTS CHAT
-    // =========================
-    else if (state === "pending_request") {
-
-      const partner = userData.chatPartner;
-
-      // USER2 ACCEPTED
-      await userRef.set({
-        state: "chatting"
-      }, { merge: true });
-
-      // UPDATE USER1
-      await db.collection("users").doc(partner).set({
-        state: "chatting"
-      }, { merge: true });
-
-      // INFORM USER1
-      await axios.post(
-        `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
-        {
-          messaging_product: "whatsapp",
-          to: partner,
-          text: {
-            body:
-`🎉 Your chat request was accepted.
-
-You can now start chatting.`
-          }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.TOKEN}`,
-            "Content-Type": "application/json"
-          }
-        }
-      );
-
-      replyText =
-`🎉 Chat connected successfully.
-
-You can now start chatting.`;
-
-    }
-
-    // =========================
-    // ACTIVE CHAT RELAY
-    // =========================
-    else if (state === "chatting") {
-
-      // END CHAT
-      if (userMessage.toLowerCase() === "/end") {
-
-        const partner = userData.chatPartner;
-
-        // RESET CURRENT USER
-        await userRef.set({
-          state: "idle",
-          chatPartner: admin.firestore.FieldValue.delete()
-        }, { merge: true });
-
-        // RESET PARTNER
-        await db.collection("users").doc(partner).set({
-          state: "idle",
-          chatPartner: admin.firestore.FieldValue.delete()
-        }, { merge: true });
-
-        // INFORM PARTNER
-        await axios.post(
-          `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
-          {
-            messaging_product: "whatsapp",
-            to: partner,
-            text: {
-              body:
-`❌ Chat ended by other user.`
-            }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${process.env.TOKEN}`,
-              "Content-Type": "application/json"
-            }
-          }
-        );
-
-        replyText =
-`✅ Chat ended successfully.`;
-
-      }
-
-      // RELAY MESSAGE
-      else {
-
-        const partner = userData.chatPartner;
-
-        // FORWARD MESSAGE
-        await axios.post(
-          `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
-          {
-            messaging_product: "whatsapp",
-            to: partner,
-            text: {
-              body: userMessage
-            }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${process.env.TOKEN}`,
-              "Content-Type": "application/json"
-            }
-          }
-        );
-
-        return res.sendStatus(200);
-
-      }
-
-    }
-
-    // =========================
-    // DEFAULT
-    // =========================
-    else {
-
-      replyText =
-`Send "Hi" to start.`;
-
-    }
-
-    // SEND REPLY
-    await axios.post(
-      `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to: from,
-        text: {
-          body: replyText
-        }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.TOKEN}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-
-    return res.sendStatus(200);
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    return res.sendStatus(500);
-
-  }
-
-});
-
-// START SERVER
 const PORT = process.env.PORT || 3000;
 
+app.get("/", (req, res) => {
+res.send("Navin Nati Running");
+});
+
+/* =========================
+WEBHOOK VERIFICATION
+========================= */
+
+app.get("/webhook", (req, res) => {
+const mode = req.query["hub.mode"];
+const token = req.query["hub.verify_token"];
+const challenge = req.query["hub.challenge"];
+
+if (mode && token) {
+if (mode === "subscribe" && token === VERIFY_TOKEN) {
+console.log("Webhook Verified");
+return res.status(200).send(challenge);
+}
+}
+
+return res.sendStatus(403);
+});
+
+/* =========================
+WHATSAPP SEND MESSAGE
+========================= */
+
+async function sendText(to, message) {
+try {
+await axios.post(
+"https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages",
+{
+messaging_product: "whatsapp",
+to,
+type: "text",
+text: {
+body: message,
+},
+},
+{
+headers: {
+Authorization: "Bearer ${TOKEN}",
+"Content-Type": "application/json",
+},
+}
+);
+} catch (err) {
+console.error(
+"SEND ERROR:",
+err.response?.data || err.message
+);
+}
+}
+
+/* =========================
+USER HELPERS
+========================= */
+
+async function getUser(phone) {
+const ref = db.collection("users").doc(phone);
+const doc = await ref.get();
+
+if (!doc.exists) {
+const newUser = {
+phone,
+state: "NEW",
+
+  activeChatPartner: null,
+
+  pendingRequests: [],
+
+  blockedUsers: [],
+
+  dailyMessages: 0,
+
+  invitationsToday: 0,
+
+  plan: "free",
+
+  createdAt: Date.now(),
+
+  lastActivity: Date.now(),
+};
+
+await ref.set(newUser);
+
+return newUser;
+
+}
+
+return doc.data();
+}
+
+async function updateUser(phone, data) {
+await db.collection("users")
+.doc(phone)
+.set(data, { merge: true });
+}
+
+/* =========================
+WELCOME MESSAGE
+========================= */
+
+async function sendWelcome(phone) {
+const msg =
+`👋 Welcome to Navin Nati
+
+🔒 Mobile numbers remain hidden.
+
+🔒 Only you and the person you're chatting with can view the conversation.
+
+🔒 Block and report options are available for your safety.
+
+Please enter the WhatsApp number of someone you know.`;
+
+await sendText(phone, msg);
+}
+
+/* =========================
+MESSAGE HANDLER
+========================= */
+
+async function handleIncomingMessage(phone, text) {
+
+const user = await getUser(phone);
+
+await updateUser(phone, {
+lastActivity: Date.now()
+});
+
+const msg = text.trim();
+
+/* FIRST TIME USER */
+
+if (
+user.state === "NEW" ||
+msg.toLowerCase() === "hi" ||
+msg.toLowerCase() === "hello" ||
+msg.toLowerCase() === "start"
+) {
+
+await sendWelcome(phone);
+
+await updateUser(phone, {
+  state: "WAITING_NUMBER"
+});
+
+return;
+
+}
+
+/* TEMP PLACEHOLDER */
+
+await sendText(
+phone,
+"System active. Part 2 will handle number validation and relationship selection."
+);
+}
+
+/* =========================
+WEBHOOK RECEIVER
+========================= */
+
+app.post("/webhook", async (req, res) => {
+
+try {
+
+const entry =
+  req.body?.entry?.[0];
+
+const change =
+  entry?.changes?.[0];
+
+const value =
+  change?.value;
+
+const message =
+  value?.messages?.[0];
+
+if (!message) {
+  return res.sendStatus(200);
+}
+
+const from = message.from;
+
+if (message.type === "text") {
+
+  const text = message.text.body;
+
+  await handleIncomingMessage(
+    from,
+    text
+  );
+} else {
+
+  await sendText(
+    from,
+    "⚠️ Currently Navin Nati supports text messages only."
+  );
+}
+
+return res.sendStatus(200);
+
+} catch (err) {
+
+console.error(err);
+
+return res.sendStatus(500);
+
+}
+});
+
+/* =========================
+START SERVER
+========================= */
+
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+console.log(
+"Navin Nati running on port ${PORT}"
+);
 });
