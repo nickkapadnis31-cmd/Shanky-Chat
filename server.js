@@ -1,6 +1,3 @@
-I'll help you modify your WhatsApp chatbot to be bilingual (Hindi/English) and add button-based interactions. Here's the enhanced version with the requested features:
-
-```javascript
 // server.js
 const express = require('express');
 const axios = require('axios');
