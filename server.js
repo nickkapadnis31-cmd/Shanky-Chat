@@ -64,7 +64,7 @@ WHATSAPP SEND MESSAGE
 async function sendText(to, message) {
 try {
 await axios.post(
-"https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages",
+'https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages',
 {
 messaging_product: "whatsapp",
 to,
@@ -75,7 +75,7 @@ body: message,
 },
 {
 headers: {
-Authorization: "Bearer ${TOKEN}",
+Authorization: 'Bearer ${TOKEN}',
 "Content-Type": "application/json",
 },
 }
@@ -98,8 +98,9 @@ const doc = await ref.get();
 
 if (!doc.exists) {
 const newUser = {
-phone,
-state: "NEW",
+  phone,
+
+  state: "NEW",
 
   activeChatPartner: null,
 
@@ -113,9 +114,15 @@ state: "NEW",
 
   plan: "free",
 
+  tempReceiver: null,
+
+  relationshipType: null,
+
+  waitingCustomerCare: false,
+
   createdAt: Date.now(),
 
-  lastActivity: Date.now(),
+  lastActivity: Date.now()
 };
 
 await ref.set(newUser);
@@ -252,6 +259,6 @@ START SERVER
 
 app.listen(PORT, () => {
 console.log(
-"Navin Nati running on port ${PORT}"
+'Navin Nati running on port ${PORT}'
 );
 });
