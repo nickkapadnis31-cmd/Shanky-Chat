@@ -1174,6 +1174,10 @@ async function canSendChatMessage(phone, user) {
     return false;
   }
 
+  if (count === 5) {
+    await sendRechargeOptions(phone, false);
+  }
+
   return true;
 }
 
