@@ -201,6 +201,7 @@ async function sendListMenu(to) {
                 rows: [
                   { id: "MENU_ABOUT", title: "About", description: "About Navin Nati" },
                   { id: "MENU_REQUESTS", title: "View Requests", description: "Pending chat requests" },
+                  { id: "MENU_RECENT", title: "Recent Chats", description: "Reconnect with last 5 chats" },
                   { id: "MENU_END", title: "End Chat", description: "End current chat only" },
                   { id: "MENU_BLOCK", title: "Block User", description: "Block current chat user" },
                   { id: "MENU_REPORT", title: "Report User", description: "Report misuse" },
@@ -309,6 +310,7 @@ async function getUser(phone) {
       state: "NEW",
       activeChatPartner: null,
       lastActiveChatPartner: null,
+      recentChats: [],
       tempReceiver: null,
       relationshipType: null,
       blockedUsers: [],
@@ -481,6 +483,158 @@ async function isBlocked(sender, receiver) {
   return (receiverUser.blockedUsers || []).includes(sender);
 }
 
+
+async function saveRecentChat(userPhone, partnerPhone) {
+  const user = await getUser(userPhone);
+  const existing = Array.isArray(user.recentChats) ? user.recentChats : [];
+
+  const filtered = existing.filter((item) => item.partner !== partnerPhone);
+
+  const updated = [
+    {
+      partner: partnerPhone,
+      lastChatAt: now(),
+    },
+    ...filtered,
+  ].slice(0, 5);
+
+  await updateUser(userPhone, {
+    recentChats: updated,
+    lastActiveChatPartner: partnerPhone,
+  });
+}
+
+async function showRecentChats(phone) {
+  const user = await getUser(phone);
+  const recentChats = Array.isArray(user.recentChats) ? user.recentChats : [];
+
+  if (!recentChats.length) {
+    await sendButtons(
+      phone,
+      `🕘 No recent chats found.\nअभी कोई recent chat नहीं है।`,
+      [
+        { id: "ACTION_START_PRIVATE_CHAT", title: "Start Chat" },
+        { id: "ACTION_OPEN_MENU", title: "Menu" },
+      ]
+    );
+    return;
+  }
+
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: phone,
+        type: "interactive",
+        interactive: {
+          type: "list",
+          header: { type: "text", text: "Recent Chats" },
+          body: {
+            text:
+              "🕘 Choose a previous chat to reconnect.\nपुरानी chat से दोबारा जुड़ने के लिए option चुनें।",
+          },
+          footer: { text: "Phone numbers remain hidden" },
+          action: {
+            button: "Open Recent",
+            sections: [
+              {
+                title: "Last 5 Chats",
+                rows: recentChats.map((item, index) => ({
+                  id: `RECENT_CHAT_${index}`,
+                  title: `Previous Chat ${index + 1}`,
+                  description: "Send reconnect request",
+                })),
+              },
+            ],
+          },
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  } catch (err) {
+    console.error("SEND RECENT CHATS ERROR:", JSON.stringify(err.response?.data || err.message));
+    await sendButtons(
+      phone,
+      `🕘 Recent chats are available.\nPlease try again or use Menu.`,
+      [
+        { id: "ACTION_OPEN_MENU", title: "Menu" },
+        { id: "ACTION_START_PRIVATE_CHAT", title: "Start Chat" },
+      ]
+    );
+  }
+}
+
+async function reconnectRecentChat(phone, controlId) {
+  const index = Number(String(controlId).replace("RECENT_CHAT_", ""));
+  const user = await getUser(phone);
+  const recentChats = Array.isArray(user.recentChats) ? user.recentChats : [];
+
+  if (!Number.isInteger(index) || index < 0 || index >= recentChats.length) {
+    await sendButtons(
+      phone,
+      `Recent chat not found.\nRecent chat नहीं मिली।`,
+      [
+        { id: "MENU_RECENT", title: "Recent Chats" },
+        { id: "ACTION_OPEN_MENU", title: "Menu" },
+      ]
+    );
+    return;
+  }
+
+  const receiver = recentChats[index].partner;
+
+  if (!receiver) {
+    await sendButtons(phone, `Recent chat not found.`, [
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
+    ]);
+    return;
+  }
+
+  if (await isBlocked(phone, receiver)) {
+    await sendButtons(phone, `❌ This request cannot be delivered.`, [
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
+    ]);
+    return;
+  }
+
+  const receiverPending = await getPendingRequests(receiver);
+  if (receiverPending.length >= MAX_PENDING_REQUESTS) {
+    await sendButtons(phone, `This person is currently unavailable. Please try later.`, [
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
+    ]);
+    return;
+  }
+
+  if (!isPaid(user) && (user.invitationsToday || 0) >= FREE_DAILY_INVITES) {
+    await sendRechargeOptions(phone, false);
+    return;
+  }
+
+  await createRequest(phone, receiver, "Previous Chat");
+  await notifyReceiver(phone, receiver, "Previous Chat");
+
+  await updateUser(phone, {
+    state: user.activeChatPartner ? user.state : "WAITING_RESPONSE",
+    invitationsToday: (user.invitationsToday || 0) + 1,
+    lastActivity: now(),
+  });
+
+  await sendButtons(
+    phone,
+    `✅ Reconnect request sent.\nReconnect request भेज दी गई है।\n\nYour current chat, if any, will continue normally.`,
+    [
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
+      { id: "MENU_RECENT", title: "Recent Chats" },
+    ]
+  );
+}
+
 async function createChat(user1, user2) {
   const chatId = [user1, user2].sort().join("_");
 
@@ -506,6 +660,9 @@ async function createChat(user1, user2) {
     state: "ACTIVE_CHAT",
     lastActivity: now(),
   });
+
+  await saveRecentChat(user1, user2);
+  await saveRecentChat(user2, user1);
 
   return chatId;
 }
@@ -799,6 +956,11 @@ async function handleAdminPaymentDecision(phone, controlId) {
 async function handleControl(phone, controlId, rawTitle, user) {
   if (await handleAdminPaymentDecision(phone, controlId)) return true;
 
+  if (String(controlId).startsWith("RECENT_CHAT_")) {
+    await reconnectRecentChat(phone, controlId);
+    return true;
+  }
+
   switch (controlId) {
     case "ACTION_OPEN_MENU":
     case "MENU":
@@ -817,6 +979,10 @@ async function handleControl(phone, controlId, rawTitle, user) {
 
     case "MENU_REQUESTS":
       await showRequests(phone);
+      return true;
+
+    case "MENU_RECENT":
+      await showRecentChats(phone);
       return true;
 
     case "MENU_END":
@@ -1172,10 +1338,6 @@ async function canSendChatMessage(phone, user) {
   if (count >= FREE_DAILY_MESSAGES) {
     await sendRechargeOptions(phone, true);
     return false;
-  }
-
-  if (count === 5) {
-    await sendRechargeOptions(phone, false);
   }
 
   return true;
