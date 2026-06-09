@@ -366,7 +366,7 @@ async function resetDailyIfNeeded(phone, user) {
 async function sendWelcome(phone) {
   await sendButtons(
     phone,
-    `👋 Welcome to Navin Nati\n\nA new trusted platform that connects people.\nलोगों को जोड़ने वाला भरोसेमंद प्लेटफॉर्म।\n\n🔒 Your messages are private.\n🔒 Block and Report options are available for your safety.\n\n🔒 आपके संदेश निजी रहेंगे।\n🔒 आपकी सुरक्षा के लिए Block और Report विकल्प उपलब्ध हैं।\n\nPlease choose an option below.\nकृपया नीचे दिए गए विकल्पों में से एक चुनें।`,
+    `👋 Welcome to Navin Nati\n\nA A connection is waiting.\n\n🔒 No mobile numbers. Just Vibes.`,
     [
       { id: "ACTION_START_PRIVATE_CHAT", title: "Start Chat" },
       { id: "ACTION_OPEN_MENU", title: "Menu" },
