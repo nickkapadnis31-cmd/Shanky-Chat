@@ -48,6 +48,8 @@ const MAX_PENDING_REQUESTS = 5;
 const DAY_PLAN_MS = 24 * 60 * 60 * 1000;
 const MONTH_PLAN_MS = 30 * 24 * 60 * 60 * 1000;
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+const TAGLINE = "🔒 No numbers. Just vibes.";
+const MAX_RECENT_CHATS = 5;
 
 /* =====================================================
    BASIC ROUTES
@@ -189,8 +191,7 @@ async function sendListMenu(to) {
           type: "list",
           header: { type: "text", text: "Navin Nati" },
           body: {
-            text:
-              "📋 Please choose from the following options.\nकृपया नीचे दिए गए विकल्पों में से एक चुनें।",
+            text: `📋 Choose what you want to do next.\n\n${TAGLINE}`,
           },
           footer: { text: "Private & Secure Communication" },
           action: {
@@ -199,15 +200,16 @@ async function sendListMenu(to) {
               {
                 title: "Navin Nati Menu",
                 rows: [
-                  { id: "MENU_ABOUT", title: "About", description: "About Navin Nati" },
-                  { id: "MENU_REQUESTS", title: "View Requests", description: "Pending chat requests" },
+                  { id: "MENU_START", title: "Start Chat", description: "Send a private invite" },
+                  { id: "MENU_REQUESTS", title: "View Requests", description: "See pending invites" },
                   { id: "MENU_RECENT", title: "Recent Chats", description: "Reconnect with last 5 chats" },
+                  { id: "MENU_WAITING", title: "Waiting Invites", description: "Send reminder or try another number" },
+                  { id: "MENU_RECHARGE", title: "Recharge", description: "₹19 day pass or ₹100 monthly" },
+                  { id: "MENU_ABOUT", title: "About", description: "How Navin Nati works" },
                   { id: "MENU_END", title: "End Chat", description: "End current chat only" },
                   { id: "MENU_BLOCK", title: "Block User", description: "Block current chat user" },
                   { id: "MENU_REPORT", title: "Report User", description: "Report misuse" },
-                  { id: "MENU_CARE", title: "Customer Care", description: "Contact support" },
-                  { id: "MENU_RECHARGE", title: "Recharge", description: "₹19 or ₹100 plan" },
-                  { id: "MENU_START", title: "Start Again", description: "Begin new request" },
+                  { id: "MENU_CARE", title: "Customer Care", description: "Get support" },
                 ],
               },
             ],
@@ -225,7 +227,7 @@ async function sendListMenu(to) {
     console.error("SEND LIST MENU ERROR:", JSON.stringify(err.response?.data || err.message));
     await sendText(
       to,
-      `📋 NAVIN NATI MENU\n\nABOUT\nREQUESTS\nEND\nBLOCK\nREPORT\nCUSTOMER CARE\nRECHARGE\nSTART`
+      `📋 NAVIN NATI MENU\n\nStart Chat\nView Requests\nRecent Chats\nWaiting Invites\nRecharge\nAbout\nEnd Chat\nBlock User\nReport User\nCustomer Care\n\n${TAGLINE}`
     );
   }
 }
@@ -366,7 +368,7 @@ async function resetDailyIfNeeded(phone, user) {
 async function sendWelcome(phone) {
   await sendButtons(
     phone,
-    `👋 Welcome to Navin Nati\n\nA A connection is waiting.\n\n🔒 No mobile numbers. Just Vibes.`,
+    `👋 Welcome to Navin Nati\n\nA private way to connect with people you know.\n\nReady to start?\n\n${TAGLINE}`,
     [
       { id: "ACTION_START_PRIVATE_CHAT", title: "Start Chat" },
       { id: "ACTION_OPEN_MENU", title: "Menu" },
@@ -385,7 +387,7 @@ async function askForNumber(phone) {
 
   await sendButtons(
     phone,
-    `Please enter the WhatsApp number of the friend you want to talk to without showing your mobile number.\n\nअपना मोबाइल नंबर दिखाए बिना जिस मित्र से बात करना चाहते हैं, उसका WhatsApp नंबर भेजें।\n\nExample:\n9876543210\nor\n919876543210`,
+    `📱 Type the WhatsApp number of the friend you want to chat with.\n\nYour number stays hidden.\n\nExample:\n9876543210\nor\n919876543210\n\n${TAGLINE}`,
     [{ id: "ACTION_OPEN_MENU", title: "Menu" }]
   );
 }
@@ -393,21 +395,21 @@ async function askForNumber(phone) {
 async function sendAbout(phone) {
   await sendButtons(
     phone,
-    `ℹ️ About Navin Nati\n\nNavin Nati helps known people connect privately on WhatsApp.\n\n🔒 Phone numbers remain hidden.\n🔒 मोबाइल नंबर छुपे रहते हैं।\n\n🔒 Messages are relayed through Navin Nati.\n🔒 संदेश Navin Nati के माध्यम से जाते हैं।\n\nSafety options:\nEnd Chat, Block, Report, Customer Care\n\nMVP supports text messages only.\nअभी केवल text messages support हैं।`,
+    `ℹ️ About Navin Nati\n\nChat with people you know without showing mobile numbers.\n\n🛡️ Block & Report are always available.\n💬 Chat starts only when both people agree.\n\nText messages only for now.\n\n${TAGLINE}`,
     [
-      { id: "ACTION_OPEN_MENU", title: "Menu" },
       { id: "ACTION_START_PRIVATE_CHAT", title: "Start Chat" },
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
     ]
   );
 }
 
 async function sendRechargeOptions(phone, limitMessage = false) {
   const body = limitMessage
-    ? `📢 You have used your 10 free messages today.\n\nआज के 10 free message उपयोग हो चुके हैं।\n\nChoose a plan to continue.\nजारी रखने के लिए plan चुनें।`
-    : `💳 Recharge Plans\n\n₹19 - Day Plan\n₹100 - Monthly Plan\n\nChoose one option.\nएक option चुनें।`;
+    ? `⚡ Free limit reached\n\nYou've used your 10 free messages today.\n\nChoose a plan to keep chatting.\n\n${TAGLINE}`
+    : `💳 Choose your pass\n\n₹19 - Day Pass\n₹100 - Monthly Pass\n\n${TAGLINE}`;
 
   await sendButtons(phone, body, [
-    { id: "PAY_PLAN_19", title: "₹19 Day Plan" },
+    { id: "PAY_PLAN_19", title: "₹19 Day Pass" },
     { id: "PAY_PLAN_100", title: "₹100 Monthly" },
     { id: "ACTION_OPEN_MENU", title: "Menu" },
   ]);
@@ -416,7 +418,7 @@ async function sendRechargeOptions(phone, limitMessage = false) {
 async function sendFiveMessageWarning(phone) {
   await sendButtons(
     phone,
-    `📢 Free Limit Update\n\nYou have used 5 of your 10 free messages today.\n\nआज के 10 free messages में से 5 messages उपयोग हो चुके हैं।`,
+    `👀 Quick heads-up\n\nYou've used 5 of your 10 free messages today.\n\nWant to keep the vibe going?\n\n${TAGLINE}`,
     [
       { id: "ACTION_CONTINUE_CHAT", title: "Continue Chat" },
       { id: "ACTION_RECHARGE", title: "Recharge" },
@@ -433,7 +435,7 @@ async function sendPaymentQR(phone, plan) {
     state: "PAYMENT_PENDING",
   });
 
-  const caption = `💳 Navin Nati Payment\n\n${getPlanLabel(plan)}\n\nScan QR and pay.\nQR scan करके payment करें।\n\nAfter payment tap PAID.\nPayment के बाद PAID दबाएं।`;
+  const caption = `💳 ${getPlanLabel(plan)}\n\nScan & pay.\nThen tap PAID.\n\n${TAGLINE}`;
 
   if (qrUrl) {
     await sendImage(phone, qrUrl, caption);
@@ -441,7 +443,7 @@ async function sendPaymentQR(phone, plan) {
     await sendText(phone, `${caption}\n\nQR image is not configured. Please contact Customer Care.`);
   }
 
-  await sendButtons(phone, `After payment, tap PAID.\nPayment के बाद PAID दबाएं।`, [
+  await sendButtons(phone, `Done paying? Tap PAID.\n\n${TAGLINE}`, [
     { id: "PAYMENT_PAID", title: "PAID" },
     { id: "ACTION_OPEN_MENU", title: "Menu" },
   ]);
@@ -483,35 +485,30 @@ async function isBlocked(sender, receiver) {
   return (receiverUser.blockedUsers || []).includes(sender);
 }
 
-
 async function saveRecentChat(userPhone, partnerPhone) {
   const user = await getUser(userPhone);
-  const existing = Array.isArray(user.recentChats) ? user.recentChats : [];
+  const oldRecent = Array.isArray(user.recentChats) ? user.recentChats : [];
 
-  const filtered = existing.filter((item) => item.partner !== partnerPhone);
-
+  const filtered = oldRecent.filter((item) => item.partner !== partnerPhone);
   const updated = [
     {
       partner: partnerPhone,
       lastChatAt: now(),
     },
     ...filtered,
-  ].slice(0, 5);
+  ].slice(0, MAX_RECENT_CHATS);
 
-  await updateUser(userPhone, {
-    recentChats: updated,
-    lastActiveChatPartner: partnerPhone,
-  });
+  await updateUser(userPhone, { recentChats: updated, lastActiveChatPartner: partnerPhone });
 }
 
-async function showRecentChats(phone) {
+async function sendRecentChatsList(phone) {
   const user = await getUser(phone);
-  const recentChats = Array.isArray(user.recentChats) ? user.recentChats : [];
+  const recent = Array.isArray(user.recentChats) ? user.recentChats.slice(0, MAX_RECENT_CHATS) : [];
 
-  if (!recentChats.length) {
+  if (!recent.length) {
     await sendButtons(
       phone,
-      `🕘 No recent chats found.\nअभी कोई recent chat नहीं है।`,
+      `🕘 No recent chats yet.\n\nStart a private chat and your recent vibes will appear here.\n\n${TAGLINE}`,
       [
         { id: "ACTION_START_PRIVATE_CHAT", title: "Start Chat" },
         { id: "ACTION_OPEN_MENU", title: "Menu" },
@@ -530,20 +527,17 @@ async function showRecentChats(phone) {
         interactive: {
           type: "list",
           header: { type: "text", text: "Recent Chats" },
-          body: {
-            text:
-              "🕘 Choose a previous chat to reconnect.\nपुरानी chat से दोबारा जुड़ने के लिए option चुनें।",
-          },
-          footer: { text: "Phone numbers remain hidden" },
+          body: { text: `🕘 Pick a recent chat to reconnect.\n\n${TAGLINE}` },
+          footer: { text: "Numbers stay hidden" },
           action: {
-            button: "Open Recent",
+            button: "Open Recent Chats",
             sections: [
               {
-                title: "Last 5 Chats",
-                rows: recentChats.map((item, index) => ({
+                title: "Last 5 chats",
+                rows: recent.map((item, index) => ({
                   id: `RECENT_CHAT_${index}`,
-                  title: `Previous Chat ${index + 1}`,
-                  description: "Send reconnect request",
+                  title: `Recent Chat ${index + 1}`,
+                  description: "Send a reconnect invite",
                 })),
               },
             ],
@@ -559,45 +553,29 @@ async function showRecentChats(phone) {
     );
   } catch (err) {
     console.error("SEND RECENT CHATS ERROR:", JSON.stringify(err.response?.data || err.message));
-    await sendButtons(
-      phone,
-      `🕘 Recent chats are available.\nPlease try again or use Menu.`,
-      [
-        { id: "ACTION_OPEN_MENU", title: "Menu" },
-        { id: "ACTION_START_PRIVATE_CHAT", title: "Start Chat" },
-      ]
-    );
+    await sendButtons(phone, `🕘 Recent chats are available.\n\n${TAGLINE}`, [
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
+    ]);
   }
 }
 
-async function reconnectRecentChat(phone, controlId) {
-  const index = Number(String(controlId).replace("RECENT_CHAT_", ""));
+async function reconnectRecentChat(phone, index) {
   const user = await getUser(phone);
-  const recentChats = Array.isArray(user.recentChats) ? user.recentChats : [];
+  const recent = Array.isArray(user.recentChats) ? user.recentChats : [];
+  const item = recent[index];
 
-  if (!Number.isInteger(index) || index < 0 || index >= recentChats.length) {
-    await sendButtons(
-      phone,
-      `Recent chat not found.\nRecent chat नहीं मिली।`,
-      [
-        { id: "MENU_RECENT", title: "Recent Chats" },
-        { id: "ACTION_OPEN_MENU", title: "Menu" },
-      ]
-    );
-    return;
-  }
-
-  const receiver = recentChats[index].partner;
-
-  if (!receiver) {
-    await sendButtons(phone, `Recent chat not found.`, [
+  if (!item || !item.partner) {
+    await sendButtons(phone, `That recent chat was not found.\n\n${TAGLINE}`, [
+      { id: "MENU_RECENT", title: "Recent Chats" },
       { id: "ACTION_OPEN_MENU", title: "Menu" },
     ]);
     return;
   }
 
+  const receiver = item.partner;
+
   if (await isBlocked(phone, receiver)) {
-    await sendButtons(phone, `❌ This request cannot be delivered.`, [
+    await sendButtons(phone, `This reconnect invite can't be sent.\n\n${TAGLINE}`, [
       { id: "ACTION_OPEN_MENU", title: "Menu" },
     ]);
     return;
@@ -605,32 +583,97 @@ async function reconnectRecentChat(phone, controlId) {
 
   const receiverPending = await getPendingRequests(receiver);
   if (receiverPending.length >= MAX_PENDING_REQUESTS) {
-    await sendButtons(phone, `This person is currently unavailable. Please try later.`, [
+    await sendButtons(phone, `They're a little busy right now. Try again later.\n\n${TAGLINE}`, [
       { id: "ACTION_OPEN_MENU", title: "Menu" },
     ]);
     return;
   }
 
-  if (!isPaid(user) && (user.invitationsToday || 0) >= FREE_DAILY_INVITES) {
-    await sendRechargeOptions(phone, false);
-    return;
-  }
-
-  await createRequest(phone, receiver, "Previous Chat");
-  await notifyReceiver(phone, receiver, "Previous Chat");
-
-  await updateUser(phone, {
-    state: user.activeChatPartner ? user.state : "WAITING_RESPONSE",
-    invitationsToday: (user.invitationsToday || 0) + 1,
-    lastActivity: now(),
-  });
+  await createRequest(phone, receiver, "Recent Chat");
+  await notifyReceiver(phone, receiver, "Recent Chat");
 
   await sendButtons(
     phone,
-    `✅ Reconnect request sent.\nReconnect request भेज दी गई है।\n\nYour current chat, if any, will continue normally.`,
+    `✨ Reconnect invite sent.\n\nWe'll let you know if they reply.\n\n${TAGLINE}`,
     [
-      { id: "ACTION_OPEN_MENU", title: "Menu" },
       { id: "MENU_RECENT", title: "Recent Chats" },
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
+    ]
+  );
+}
+
+async function getPendingSentRequests(phone) {
+  const snap = await db.collection("requests").where("sender", "==", phone).get();
+
+  return snap.docs
+    .map((d) => d.data())
+    .filter((r) => r.status === "pending")
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+}
+
+async function showWaitingInvites(phone) {
+  const requests = await getPendingSentRequests(phone);
+
+  if (!requests.length) {
+    await sendButtons(phone, `📭 No waiting invites right now.\n\n${TAGLINE}`, [
+      { id: "ACTION_START_PRIVATE_CHAT", title: "Start Chat" },
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
+    ]);
+    return;
+  }
+
+  const request = requests[0];
+  await updateUser(phone, { reminderRequestId: request.requestId });
+
+  await sendButtons(
+    phone,
+    `👀 Still waiting?\n\nYour invite hasn't been answered yet.\n\nWhat would you like to do?\n\n${TAGLINE}`,
+    [
+      { id: "ACTION_SEND_REMINDER", title: "Send Reminder" },
+      { id: "ACTION_START_PRIVATE_CHAT", title: "Try Another" },
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
+    ]
+  );
+}
+
+async function sendSenderControlledReminder(phone) {
+  const user = await getUser(phone);
+  const requestId = user.reminderRequestId;
+
+  if (!requestId) {
+    await showWaitingInvites(phone);
+    return;
+  }
+
+  const ref = db.collection("requests").doc(requestId);
+  const snap = await ref.get();
+
+  if (!snap.exists || snap.data().sender !== phone || snap.data().status !== "pending") {
+    await sendButtons(phone, `This invite is no longer waiting.\n\n${TAGLINE}`, [
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
+    ]);
+    return;
+  }
+
+  const request = snap.data();
+
+  await sendTemplateInvite(request.receiver);
+
+  await ref.set(
+    {
+      lastReminderSentAt: now(),
+      reminderCount: (request.reminderCount || 0) + 1,
+      lastActivity: now(),
+    },
+    { merge: true }
+  );
+
+  await sendButtons(
+    phone,
+    `🔔 Reminder sent.\n\nLet's see if they vibe back.\n\n${TAGLINE}`,
+    [
+      { id: "ACTION_START_PRIVATE_CHAT", title: "Try Another" },
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
     ]
   );
 }
@@ -647,6 +690,9 @@ async function createChat(user1, user2) {
     lastActivity: now(),
   });
 
+  await saveRecentChat(user1, user2);
+  await saveRecentChat(user2, user1);
+
   await updateUser(user1, {
     activeChatPartner: user2,
     lastActiveChatPartner: user2,
@@ -660,9 +706,6 @@ async function createChat(user1, user2) {
     state: "ACTIVE_CHAT",
     lastActivity: now(),
   });
-
-  await saveRecentChat(user1, user2);
-  await saveRecentChat(user2, user1);
 
   return chatId;
 }
@@ -821,7 +864,7 @@ async function startCustomerCare(phone) {
 
   await sendText(
     phone,
-    `🎧 Customer Care\n\nPlease type your message.\nकृपया अपना message type करें।\n\nAdmin number will not be shown.\nAdmin number नहीं दिखेगा।`
+    `💬 We're listening.\n\nTell us what's up.\n\n${TAGLINE}`
   );
 }
 
@@ -859,23 +902,18 @@ async function showRequests(phone) {
   const requests = await getPendingRequests(phone);
 
   if (!requests.length) {
-    await sendButtons(phone, `📭 No pending requests.\nकोई pending request नहीं है।`, [
-      { id: "ACTION_OPEN_MENU", title: "Menu" },
+    await sendButtons(phone, `📭 Nothing waiting for you right now.\n\n${TAGLINE}`, [
       { id: "ACTION_START_PRIVATE_CHAT", title: "Start Chat" },
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
     ]);
     return;
   }
 
-  let msg = `📩 Pending Requests\nPending requests:\n\n`;
-  requests.forEach((r, i) => {
-    msg += `${i + 1}. ${r.relationship}\n`;
-  });
-
-  msg += `\nOldest request will be handled first.\nसबसे पुरानी request पहले handle होगी।`;
+  let msg = `📩 You have ${requests.length} invite${requests.length > 1 ? "s" : ""} waiting.\n\nOldest invite opens first.\n\n${TAGLINE}`;
 
   await sendButtons(phone, msg, [
-    { id: "REQ_ACCEPT", title: "Accept" },
-    { id: "REQ_REJECT", title: "Reject" },
+    { id: "REQ_ACCEPT", title: "Start Chat" },
+    { id: "REQ_REJECT", title: "Not Now" },
     { id: "ACTION_OPEN_MENU", title: "Menu" },
   ]);
 }
@@ -956,8 +994,9 @@ async function handleAdminPaymentDecision(phone, controlId) {
 async function handleControl(phone, controlId, rawTitle, user) {
   if (await handleAdminPaymentDecision(phone, controlId)) return true;
 
-  if (String(controlId).startsWith("RECENT_CHAT_")) {
-    await reconnectRecentChat(phone, controlId);
+  if (controlId && controlId.startsWith("RECENT_CHAT_")) {
+    const index = Number(controlId.replace("RECENT_CHAT_", ""));
+    await reconnectRecentChat(phone, index);
     return true;
   }
 
@@ -982,7 +1021,15 @@ async function handleControl(phone, controlId, rawTitle, user) {
       return true;
 
     case "MENU_RECENT":
-      await showRecentChats(phone);
+      await sendRecentChatsList(phone);
+      return true;
+
+    case "MENU_WAITING":
+      await showWaitingInvites(phone);
+      return true;
+
+    case "ACTION_SEND_REMINDER":
+      await sendSenderControlledReminder(phone);
       return true;
 
     case "MENU_END":
@@ -1114,8 +1161,8 @@ async function handleTemplateButtonByTitle(phone, title, user) {
     return true;
   }
 
-  if (t.includes("who are you") || t.includes("name") || t.includes("नाम") || t.includes("hi")) {
-    await acceptOldestRequest(phone, title);
+  if (t.includes("start chat") || t.includes("say hello") || t.includes("hello") || t.includes("who are you") || t.includes("name") || t.includes("नाम") || t.includes("hi")) {
+    await acceptOldestRequest(phone, title || "Start Chat");
     return true;
   }
 
@@ -1184,7 +1231,9 @@ async function sendPreparedRequest(phone) {
   }
 
   if (await isBlocked(phone, receiver)) {
-    await sendButtons(phone, `❌ This request cannot be delivered.`, [
+    await sendButtons(phone, `This invite can't be delivered.
+
+${TAGLINE}`, [
       { id: "ACTION_OPEN_MENU", title: "Menu" },
     ]);
     return;
@@ -1192,7 +1241,9 @@ async function sendPreparedRequest(phone) {
 
   const receiverPending = await getPendingRequests(receiver);
   if (receiverPending.length >= MAX_PENDING_REQUESTS) {
-    await sendButtons(phone, `This person is currently unavailable. Please try later.`, [
+    await sendButtons(phone, `They're a little busy right now. Try later.
+
+${TAGLINE}`, [
       { id: "ACTION_OPEN_MENU", title: "Menu" },
     ]);
     return;
@@ -1268,7 +1319,9 @@ async function acceptOldestRequest(phone, firstReply) {
   const request = requests[0];
 
   if (await isBlocked(request.sender, phone)) {
-    await sendButtons(phone, `This request cannot be accepted.`, [
+    await sendButtons(phone, `This invite can't be accepted.
+
+${TAGLINE}`, [
       { id: "ACTION_OPEN_MENU", title: "Menu" },
     ]);
     return;
@@ -1323,7 +1376,9 @@ async function rejectOldestRequest(phone) {
     { id: "ACTION_START_PRIVATE_CHAT", title: "Start Again" },
   ]);
 
-  await sendText(request.sender, "Your request could not be completed.");
+  await sendText(request.sender, `Your invite couldn't be completed.
+
+${TAGLINE}`);
 }
 
 /* =====================================================
