@@ -146,7 +146,7 @@ async function sendText(to, message) {
 
 async function sendButtons(to, body, buttons) {
   try {
-    const safeButtons = buttons.slice(0, 3).map((b, index) => ({
+    const safeButtons = (buttons || []).slice(0, 3).map((b, index) => ({
       type: "reply",
       reply: {
         id: b.id || `BTN_${index + 1}`,
@@ -175,7 +175,7 @@ async function sendButtons(to, body, buttons) {
     );
   } catch (err) {
     console.error("SEND BUTTON ERROR:", JSON.stringify(err.response?.data || err.message));
-    await sendText(to, `${body}\n\n${buttons.map((b) => b.title).join("\n")}`);
+    await sendText(to, `${body}\n\n${(buttons || []).map((b) => b.title).join("\n")}`);
   }
 }
 
@@ -1340,7 +1340,7 @@ Say hi and see where it goes.
 🔒 No numbers. Just vibes.`,
   [
     { id: "ACTION_OPEN_MENU", title: "Menu" },
-    { id: "MENU_END", title: "End" },
+    { id: "MENU_END", title: "End chat" },
   ]
 );
 }
