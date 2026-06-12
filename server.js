@@ -758,19 +758,6 @@ async function endChat(phone, notifyPartner = true) {
 
 async function notifyReceiver(sender, receiver, relationship) {
   await sendTemplateInvite(receiver);
-
-  const receiverUser = await getUser(receiver);
-
-  if (receiverUser.activeChatPartner) {
-    await sendButtons(
-      receiver,
-      `📩 New Chat Request Received\n\nYour current chat continues normally.\nआपकी current chat जारी रहेगी।\n\nOpen menu and choose View Requests.`,
-      [
-        { id: "ACTION_OPEN_MENU", title: "Menu" },
-        { id: "MENU_REQUESTS", title: "Requests" },
-      ]
-    );
-  }
 }
 
 /* =====================================================
