@@ -1328,16 +1328,12 @@ ${TAGLINE}`, [
 
   await sendText(
     request.sender,
-    `🎉 Good News!\n\nThe other person replied:\n"${firstReply}"\n\nYou can now introduce yourself.\n\n🔒 Mobile numbers remain hidden.`
+    `🎉 Good News!\n\nYour Request accepeted\n\nSend your first Message\n\n🔒 Mobile numbers remain hidden.`
   );
 
   await sendButtons(
     phone,
-    `✅ Chat started.\nChat शुरू हो गई है।\n\nYou can now chat.\nMENU anytime.`,
-    [
-      { id: "ACTION_OPEN_MENU", title: "Menu" },
-      { id: "MENU_END", title: "End" },
-    ]
+    `✅ Chat started.\nChat शुरू हो गई है।\n\nWait for your first Message or You can also send your first message.\nMENU anytime.`,
   );
 }
 
