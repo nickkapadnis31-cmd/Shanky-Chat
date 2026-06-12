@@ -1332,9 +1332,17 @@ ${TAGLINE}`, [
   );
 
   await sendButtons(
-    phone,
-    `✅ Chat started.\nChat शुरू हो गई है।\n\nWait for your first Message or You can also send your first message.\nMENU anytime.`,
-  );
+  phone,
+  `🎉 You're connected.
+
+Say hi and see where it goes.
+
+🔒 No numbers. Just vibes.`,
+  [
+    { id: "ACTION_OPEN_MENU", title: "Menu" },
+    { id: "MENU_END", title: "End" },
+  ]
+);
 }
 
 async function rejectOldestRequest(phone) {
