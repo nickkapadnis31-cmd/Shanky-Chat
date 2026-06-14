@@ -1148,10 +1148,17 @@ async function handleTemplateButtonByTitle(phone, title, user) {
     return true;
   }
 
-  if (t.includes("start chat") || t.includes("say hello") || t.includes("hello") || t.includes("who are you") || t.includes("name") || t.includes("नाम") || t.includes("hi")) {
+ if (
+    t.includes("accept request") ||
+    t.includes("start chat") ||
+    t.includes("say hello") ||
+    t.includes("hello") ||
+    t.includes("who are you") ||
+    t.includes("name")
+) {
     await acceptOldestRequest(phone, title || "Start Chat");
     return true;
-  }
+}
 
   return false;
 }
@@ -1168,13 +1175,24 @@ async function proceedKnowYes(phone) {
     return;
   }
 
-  await updateUser(phone, { state: "RELATIONSHIP_SELECTION" });
+  await updateUser(phone, {
+    relationshipType: "Friend",
+    state: "READY_TO_SEND",
+  });
 
-  await sendButtons(phone, `Who is this person?\nयह व्यक्ति कौन है?`, [
-    { id: "REL_RELATIVE", title: "Relative" },
-    { id: "REL_FRIEND", title: "Friend" },
-    { id: "REL_KNOWN", title: "I Know Them" },
-  ]);
+  await sendButtons(
+    phone,
+    `✅ Request Ready
+
+Send request?\n\n Your Mobile number stays hidden.
+
+🔒 No numbers. Just vibes.`,
+    [
+      { id: "SEND_REQUEST", title: "Send" },
+      { id: "ACTION_START_PRIVATE_CHAT", title: "Start Again" },
+      { id: "ACTION_OPEN_MENU", title: "Menu" },
+    ]
+  );
 }
 
 async function proceedKnowNo(phone) {
@@ -1198,7 +1216,7 @@ async function selectRelationship(phone, relation) {
 
   await sendButtons(
     phone,
-    `✅ Request Ready\n\nRelationship:\n${relation}\n\nSend request?\nRequest भेजें?`,
+    `✅ Request Ready\n\nRelationship:\n${relation}\n\nSend request?\nRequest भेजें?\n\n Your Mobile Number Stays Hidden`,
     [
       { id: "SEND_REQUEST", title: "Send" },
       { id: "ACTION_START_PRIVATE_CHAT", title: "Start Again" },
